@@ -54,6 +54,7 @@ function App() {
       await setDoc(gameRef, {
         [quizData[questionIndex].index]: {
           userAnswer: userAnswer,
+          evaluateAnswer: data.answer,
           gptAnswer: data.GPTAnswer,
           gptPercentage: data.percentage,
           status: 'answered',
@@ -145,6 +146,7 @@ function App() {
         newGame[question.index] = {
           question: question.frage,
           correctAnswer: question.antwort,
+          evaluateAnswer: null,
           userAnswer: null,
           gptAnswer: null,
           gptPercentage: null,
