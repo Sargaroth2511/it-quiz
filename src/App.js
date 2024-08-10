@@ -6,6 +6,7 @@ import authListener from "./Services/firebase/authListener";
 import logOut from "./Services/firebase/logOut";
 import SignInWithGooglePopup from "./components/signInWithGooglePopup";
 import { getFirestore, collection, doc, setDoc, addDoc } from "firebase/firestore";
+import GameStatistics from "./components/GameStatistics";
 
 function App() {
   const [gptData, setGptData] = useState(null);
@@ -19,6 +20,7 @@ function App() {
   const [showSignInWithGooglePopup, setShowSignInWithGooglePopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [gameID, setGameID] = useState(null);
+  const [isGameComplete, setIsGameComplete] = useState(false);
 
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -81,7 +83,9 @@ function App() {
           storeInDB(data);
           setLoading(false);
           setSendAnswer(false);
-
+          if (questionIndex === 9) {
+            setIsGameComplete(true);
+          }
         })
         .catch(err => setError(err));
     } else if (sendAnswer && !currentUser) {
@@ -149,7 +153,7 @@ function App() {
           evaluateAnswer: null,
           userAnswer: null,
           gptAnswer: null,
-          gptPercentage: null,
+          gptPercentage: 0,
           status: null,
         };
       });
@@ -165,6 +169,7 @@ function App() {
     setIsPlaying(true);
     setUserAnswer("");
     setGptData(null);
+    setIsGameComplete(false);
   };
 
   const endGame = () => {
@@ -172,6 +177,7 @@ function App() {
     setUserAnswer("");
     setGptData(null);
     setQuizdata(null);
+    setIsGameComplete(true);
   };
 
   return (
@@ -180,6 +186,15 @@ function App() {
       {showSignInWithGooglePopup ? (
         <SignInWithGooglePopup
         showPopup = {setShowSignInWithGooglePopup}
+        />
+      ) : (
+        ""
+      )}
+      {isGameComplete ? (
+        <GameStatistics
+        showStatistics = {setIsGameComplete}
+        db= {db}
+        gameId = {gameID}
         />
       ) : (
         ""
