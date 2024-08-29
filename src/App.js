@@ -7,6 +7,7 @@ import logOut from "./Services/firebase/logOut";
 import SignInWithGooglePopup from "./components/signInWithGooglePopup";
 import { getFirestore, collection, doc, setDoc, addDoc } from "firebase/firestore";
 import GameStatistics from "./components/GameStatistics";
+import GameRanking from "./components/GameRanking";
 
 function App() {
   const [gptData, setGptData] = useState(null);
@@ -21,6 +22,9 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [gameID, setGameID] = useState(null);
   const [isGameComplete, setIsGameComplete] = useState(false);
+  const [correctAnswer, setCorrectAnswer] = useState(null);
+  const [showRanking, setShowRanking] = useState(false);
+  const [showGameStatistics, setShowGameStatistics] = useState(false);
 
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -50,58 +54,46 @@ function App() {
     }
   };
 
-  const storeInDB = async (data) => {
-    try {
-      const gameRef = doc(db, "games", gameID);
-      await setDoc(gameRef, {
-        [quizData[questionIndex].index]: {
-          userAnswer: userAnswer,
-          evaluateAnswer: data.answer,
-          gptAnswer: data.GPTAnswer,
-          gptPercentage: data.percentage,
-          status: 'answered',
-        },
-      }, { merge: true });
-    } catch (error) {
-      console.error("Error storing data in DB: ", error);
-    }
-  };
 
   useEffect(() => {
-    if (sendAnswer && currentUser && quizData) {
+    if (!sendAnswer) return;
+    if (sendAnswer && currentUser) {
       setLoading(true);
       const correctAnswer = quizData[questionIndex].antwort;
       const question = quizData[questionIndex].frage;
+      const questionId = quizData[questionIndex].index;
+      console.log(questionId);
 
       const fetchData = async () => {
-        const data = await fetchGPTData(correctAnswer, question, userAnswer);
+        const data = await fetchGPTData(userAnswer, questionId, gameID);
         return data;
       };
       fetchData()
         .then(data => {
-          setGptData(data);
-          storeInDB(data);
+          setGptData(data.reply);
+          setCorrectAnswer(data.dbAnswer);
           setLoading(false);
           setSendAnswer(false);
           if (questionIndex === 9) {
             setIsGameComplete(true);
           }
         })
-        .catch(err => setError(err));
+        .catch(err => console.log(err));
     } else if (sendAnswer && !currentUser) {
       alert("Du muss eingeloggt sein um die Funktion nutzen zu können");
       setSendAnswer(false);
     }
-  }, [sendAnswer, currentUser, questionIndex, userAnswer, quizData]);
+  }, [sendAnswer, currentUser]);
 
-  useEffect(() => {
-    if (!isPlaying) return;
-    const learningField = "LF1";
-    const backendUrl = `/quizlet?questionNumber=${encodeURIComponent(
-      questionNumber
-    )}&learningField=${encodeURIComponent(learningField)}`;
-
-    fetch(backendUrl)
+  const createNewGame = () => {
+    setIsPlaying(true);
+    fetch("/createNewGame", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId: currentUser.uid }),
+    })
       .then(res => {
         if (!res.ok) {
           setError(`Request failed with status ${res.status}`);
@@ -110,18 +102,50 @@ function App() {
         return res.json();
       })
       .then(data => {
-        createNewGame(db, currentUser.uid, data);
-        setQuizdata(data);
+        setQuizdata(data.questionsAndAnswers);
+        console.log(data.gameId);
+        setGameID(data.gameId);
+
       })
       .catch(error => {
         console.error("An error occurred:", error.message);
         setError(true);
       });
-  }, [isPlaying]);
+  }
+
+  // useEffect(() => {
+  //   if (!isPlaying) return;
+
+  //   fetch("/createNewGame", {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //     },
+  //     body: JSON.stringify({ userId: currentUser.uid }),
+  //   })
+  //     .then(res => {
+  //       if (!res.ok) {
+  //         setError(`Request failed with status ${res.status}`);
+  //         throw new Error(`Request failed with status ${res.status}`);
+  //       }
+  //       return res.json();
+  //     })
+  //     .then(data => {
+  //       setQuizdata(data.questionsAndAnswers);
+  //       console.log(data.gameId);
+  //       setGameID(data.gameId);
+
+  //     })
+  //     .catch(error => {
+  //       console.error("An error occurred:", error.message);
+  //       setError(true);
+  //     });
+  // }, [isPlaying]);
 
   useEffect(() => {
     setUserAnswer("");
     setGptData(null);
+    setCorrectAnswer(null);
   }, [questionIndex]);
 
   // TODO:Change bounderies to match the length of the json response
@@ -138,36 +162,11 @@ function App() {
     }
   };
 
-  async function createNewGame(db, userId, data) {
-    try {
-      console.log(data);
-      const newGame = {
-        createdBy: userId,
-        createdAt: new Date(),
-        status: 'active',
-      };
-      data.forEach((question) => {
-        newGame[question.index] = {
-          question: question.frage,
-          correctAnswer: question.antwort,
-          evaluateAnswer: null,
-          userAnswer: null,
-          gptAnswer: null,
-          gptPercentage: 0,
-          status: null,
-        };
-      });
-      const gameRef = await addDoc(collection(db, "games"), newGame);
-      console.log("New game created with ID: ", gameRef.id);
-      setGameID(gameRef.id);
-    } catch (error) {
-      console.error("Error creating new game: ", error);
-    }
-  }
 
   const startNewGame = () => {
-    setIsPlaying(true);
+    createNewGame();
     setUserAnswer("");
+    setCorrectAnswer(null);
     setGptData(null);
     setIsGameComplete(false);
   };
@@ -177,11 +176,18 @@ function App() {
     setUserAnswer("");
     setGptData(null);
     setQuizdata(null);
+    setCorrectAnswer(null);
     setIsGameComplete(true);
   };
 
   return (
     <div className="appContainer">
+
+      {showRanking ? (
+        <GameRanking/>
+      ) : (
+        ""
+      )}
      
       {showSignInWithGooglePopup ? (
         <SignInWithGooglePopup
@@ -190,10 +196,9 @@ function App() {
       ) : (
         ""
       )}
-      {isGameComplete ? (
+      {showGameStatistics ? (
         <GameStatistics
-        showStatistics = {setIsGameComplete}
-        db= {db}
+        showGameStatisticsState = {[showGameStatistics, setShowGameStatistics]}
         gameId = {gameID}
         />
       ) : (
@@ -236,13 +241,13 @@ function App() {
     
     <div>
       <div>
-        {quizData && sendAnswer && currentUser ? (
+        {correctAnswer ? (
           <div>
             <h3>Antwort aus der Datenbank</h3>
-            <p>{quizData[questionIndex].antwort}</p>
+            <p>{correctAnswer}</p>
           </div>
         ) : (
-          "Hier steht die richtige Antwort"
+          ""
         )}
       </div>
       
@@ -271,12 +276,19 @@ function App() {
       
       {error && <p>Irgendetwas ist schief gelaufen...</p>}
     </div>
-    <button onClick={endGame} disabled={loading}>Spiel beenden</button>  
+    <button onClick={endGame} disabled={loading}>Spiel beenden</button>
+    <button onClick={() => setShowGameStatistics(!showGameStatistics)}>
+    Show Statistics
+  </button>  
   </div>
 ) : (
   <div>
     <br />
     <button onClick={()=>startNewGame()}>Neues Spiel?</button>
+    <button onClick={()=>setShowRanking(!showRanking)}>Show Ranking</button>
+    
+  
+
 
   </div>
 )}
