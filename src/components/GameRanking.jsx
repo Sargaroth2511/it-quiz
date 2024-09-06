@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import LoadingAnimation from './LoadingAnimation';
 
-const GameRanking = () => {
+const GameRanking = ({showRanking}) => {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,12 +31,20 @@ const GameRanking = () => {
   }, []);
 
   // Fehler oder Ladeanzeige
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <LoadingAnimation />;
   if (error) return <div>Error: {error}</div>;
 
   // Darstellung der Spiele mit durchschnittlichem GPT-Prozentsatz in einer Liste
   return (
-    <div>
+    <div className='statistics'>
+      <div className='gameStatistics'>
+      <button 
+                    className='closeButton'
+                    onClick={() => {
+                    showRanking(false)
+                    setLoading(false)
+                }
+                }>X</button>
       <h1>Game Ranking</h1>
       <ul>
         {games.map((game, index) => (
@@ -44,6 +53,8 @@ const GameRanking = () => {
           </li>
         ))}
       </ul>
+      </div>
+      
     </div>
   );
 };

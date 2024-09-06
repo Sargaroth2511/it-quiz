@@ -1,34 +1,29 @@
 import React, { useEffect, useState } from "react";
-import firebaseApp from "./Services/firebase/initializeFirebase";
 import "./App.css";
-import fetchGPTData from "./Services/apiCalls/fetchGPTData";
+import fetchGPTEvaluation from "./Services/apiCalls/fetchGPTEvaluation";
 import authListener from "./Services/firebase/authListener";
 import logOut from "./Services/firebase/logOut";
 import SignInWithGooglePopup from "./components/signInWithGooglePopup";
-import { getFirestore, collection, doc, setDoc, addDoc } from "firebase/firestore";
 import GameStatistics from "./components/GameStatistics";
 import GameRanking from "./components/GameRanking";
+import createNewGame from "./Services/apiCalls/createNewGame";
+import LoadingAnimation from "./components/LoadingAnimation";
 
 function App() {
   const [gptData, setGptData] = useState(null);
   const [userAnswer, setUserAnswer] = useState("");
-  const [sendAnswer, setSendAnswer] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [quizData, setQuizdata] = useState(null);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [signIn, setSignIn] = useState(null);
   const [showSignInWithGooglePopup, setShowSignInWithGooglePopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [gameID, setGameID] = useState(null);
-  const [isGameComplete, setIsGameComplete] = useState(false);
   const [correctAnswer, setCorrectAnswer] = useState(null);
   const [showRanking, setShowRanking] = useState(false);
   const [showGameStatistics, setShowGameStatistics] = useState(false);
 
   const [currentUser, setCurrentUser] = useState(null);
-
-  const db = getFirestore(firebaseApp);
 
   useEffect(() => {
     const unsubscribe = authListener(setCurrentUser);
@@ -37,157 +32,83 @@ function App() {
     };
   }, []);
 
-  let questionNumber = 10;
 
   const submitForm = e => {
-    e.preventDefault();
-    if (e.keyCode === 13) {
+    if(e.type === "submit" || e.key === "Enter") {
+      checkUserAnswer();
       e.preventDefault();
     }
-    setSendAnswer(true);
   };
 
-  const handleKeyPress = event => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      setSendAnswer(true);
-    }
-  };
+  const checkUserAnswer = () => {
+    // Move to Backend
+    if(!currentUser) return alert("Du musst eingeloggt sein um die Funktion nutzen zu können");
 
+    setLoading(true);
+    let questionId = quizData[questionIndex].index;
 
-  useEffect(() => {
-    if (!sendAnswer) return;
-    if (sendAnswer && currentUser) {
-      setLoading(true);
-      const correctAnswer = quizData[questionIndex].antwort;
-      const question = quizData[questionIndex].frage;
-      const questionId = quizData[questionIndex].index;
-      console.log(questionId);
-
-      const fetchData = async () => {
-        const data = await fetchGPTData(userAnswer, questionId, gameID);
-        return data;
-      };
-      fetchData()
-        .then(data => {
-          setGptData(data.reply);
-          setCorrectAnswer(data.dbAnswer);
-          setLoading(false);
-          setSendAnswer(false);
-          if (questionIndex === 9) {
-            setIsGameComplete(true);
-          }
-        })
-        .catch(err => console.log(err));
-    } else if (sendAnswer && !currentUser) {
-      alert("Du muss eingeloggt sein um die Funktion nutzen zu können");
-      setSendAnswer(false);
-    }
-  }, [sendAnswer, currentUser]);
-
-  const createNewGame = () => {
-    setIsPlaying(true);
-    fetch("/createNewGame", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ userId: currentUser.uid }),
-    })
-      .then(res => {
-        if (!res.ok) {
-          setError(`Request failed with status ${res.status}`);
-          throw new Error(`Request failed with status ${res.status}`);
-        }
-        return res.json();
-      })
+    try {
+      fetchGPTEvaluation(userAnswer, questionId, gameID)
       .then(data => {
-        setQuizdata(data.questionsAndAnswers);
-        console.log(data.gameId);
-        setGameID(data.gameId);
-
+        setGptData(data.reply);
+        setCorrectAnswer(data.dbAnswer);
+        setLoading(false);
       })
-      .catch(error => {
-        console.error("An error occurred:", error.message);
-        setError(true);
-      });
+    } catch (error) {
+      console.error("An error occurred:", error.message);
+      setError(true);
+    }
+  };
+
+
+
+  const startNewGame = async () => {
+    setIsPlaying(true);
+    clearQuestionData();
+    setLoading(true);
+    setQuizdata(null);
+    setQuestionIndex(0);
+
+    try {
+      let gameData = await createNewGame(currentUser.uid)
+      setQuizdata(gameData.gameQuestions);
+      console.log(gameData.gameId);
+      setGameID(gameData.gameId);
+      setLoading(false);
+    } catch (error) {
+      console.error("An error occurred:", error.message);
+      setError(true);
+    }
   }
 
-  // useEffect(() => {
-  //   if (!isPlaying) return;
 
-  //   fetch("/createNewGame", {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/json",
-  //     },
-  //     body: JSON.stringify({ userId: currentUser.uid }),
-  //   })
-  //     .then(res => {
-  //       if (!res.ok) {
-  //         setError(`Request failed with status ${res.status}`);
-  //         throw new Error(`Request failed with status ${res.status}`);
-  //       }
-  //       return res.json();
-  //     })
-  //     .then(data => {
-  //       setQuizdata(data.questionsAndAnswers);
-  //       console.log(data.gameId);
-  //       setGameID(data.gameId);
 
-  //     })
-  //     .catch(error => {
-  //       console.error("An error occurred:", error.message);
-  //       setError(true);
-  //     });
-  // }, [isPlaying]);
+  const changeQuestionIndex = () => {
 
-  useEffect(() => {
-    setUserAnswer("");
-    setGptData(null);
-    setCorrectAnswer(null);
-  }, [questionIndex]);
-
-  // TODO:Change bounderies to match the length of the json response
-
-  const changeQuestionIndex = e => {
-    if(loading) return alert("Bitte warte bis die Antwort geladen ist");
-    if (questionIndex > 0 && e.currentTarget.id === "prevButton")
-      setQuestionIndex(prevIndex => (prevIndex -= 1));
-    if (
-      questionIndex < 9 &&
-      e.currentTarget.id === "nextButton"
-    ) {
-      setQuestionIndex(prevIndex => (prevIndex += 1));
-    }
+    setQuestionIndex(prevIndex => (prevIndex += 1));
+    clearQuestionData();
+    
   };
 
-
-  const startNewGame = () => {
-    createNewGame();
-    setUserAnswer("");
-    setCorrectAnswer(null);
-    setGptData(null);
-    setIsGameComplete(false);
-  };
 
   const endGame = () => {
     setIsPlaying(false);
+    clearQuestionData();
+    setQuizdata(null);
+  };
+
+  const clearQuestionData = () => { 
     setUserAnswer("");
     setGptData(null);
-    setQuizdata(null);
     setCorrectAnswer(null);
-    setIsGameComplete(true);
   };
 
   return (
     <div className="appContainer">
 
-      {showRanking ? (
-        <GameRanking/>
-      ) : (
-        ""
-      )}
+      {showRanking ? (<GameRanking
+      showRanking={setShowRanking}
+      />) : ("")}
      
       {showSignInWithGooglePopup ? (
         <SignInWithGooglePopup
@@ -209,7 +130,7 @@ function App() {
         <div>
           {!currentUser ? (
           <button onClick={()=>setShowSignInWithGooglePopup(true)}>Mit Google anmelden</button>
-          ):(<button onClick={() => logOut(setSignIn, setError)}>Ausloggen</button>)}
+          ):(<button onClick={() => logOut(setError)}>Ausloggen</button>)}
           {/* <br /> */}
           
         </div>
@@ -220,7 +141,7 @@ function App() {
       <p>Frage Nummer {questionIndex + 1}</p>
       <p>{quizData ? quizData[questionIndex].frage : "Hier soll die Frage stehen..."}</p>
       
-      <form onKeyDown={handleKeyPress} onSubmit={submitForm}>
+      <form onKeyDown={submitForm} onSubmit={submitForm}>
         <label htmlFor="answerField"></label>
         <br />
         <textarea
@@ -253,7 +174,7 @@ function App() {
       
       <div>
         {loading ? (
-          "Loading..."
+          <LoadingAnimation />
         ) : gptData ? (
           <div>
             <div>
@@ -264,7 +185,7 @@ function App() {
             <div>
               <h3>Lösung von ChatGPT</h3>
               <p>{gptData.GPTAnswer}</p>
-              <button id="nextButton" onClick={changeQuestionIndex}>
+              <button id="nextButton" disabled={questionIndex===9} onClick={changeQuestionIndex}>
         Nächste Frage
       </button>
             </div>
@@ -279,7 +200,9 @@ function App() {
     <button onClick={endGame} disabled={loading}>Spiel beenden</button>
     <button onClick={() => setShowGameStatistics(!showGameStatistics)}>
     Show Statistics
-  </button>  
+  </button>
+  <button onClick={()=>setShowRanking(!showRanking)}>Show Ranking</button>
+
   </div>
 ) : (
   <div>

@@ -6,7 +6,7 @@ const SignInWithGooglePopup = ({showPopup}) => {
   return (
     <div className="authPopup">
         <div className="auth-form">
-            <button onClick={()=> showPopup(false)} id="closeButton">
+            <button onClick={()=> showPopup(false)} className="closeButton">
             X
             </button>
             <h2>Sign In With Your Google Account</h2>

@@ -2,10 +2,10 @@ import { getAuth, signOut } from "firebase/auth";
 
 const auth = getAuth();
 
-const logOut = (setSignIn, setError) => {
+const logOut = (setError) => {
   signOut(auth)
     .then(() => {
-      setSignIn(false);
+      console.log("User signed out");
     })
     .catch(err => setError(err));
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LoadingAnimation from './LoadingAnimation';
 
 const GameStatistics = ({ showGameStatisticsState, gameId }) => {
     const [showGameStatistics, setShowGameStatistics] = showGameStatisticsState;
@@ -32,16 +33,18 @@ const GameStatistics = ({ showGameStatisticsState, gameId }) => {
     if (error) return <div>Error: {error}</div>;
 
     return (
-        <div className='authPopup'>
+        <div className='statistics'>
             <div className='gameStatistics'>
-                <button onClick={() => {
+                <button 
+                    className='closeButton'
+                    onClick={() => {
                     setShowGameStatistics(false)
                     setLoading(false)
                 }
-                }>Close</button>
+                }>X</button>
                 <h2>Game Statistics</h2>
             {
-                loading ? <div>Loading...</div>
+                loading ? <LoadingAnimation />
                 : error ? <div>Error: {error}</div>
                 : statistics && (
                     <>
